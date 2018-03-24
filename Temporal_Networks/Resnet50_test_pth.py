@@ -20,15 +20,28 @@ from torch.autograd import Variable
 import JesterDatasetHandler as jdh
 import MyResnet as myresnet 
 
+
+# 1=GPU_Mode; 0=CPU_Mode
+GPU = 1
+
+
 # Initialize the dataset handler
-test_dictionary = os.path.join(os.path.expanduser('~'),"DukeML/datasets/jester/ServerTestDictionary_5class.txt")
+test_dictionary = os.path.join(os.path.expanduser('~'),"DukeML/datasets/jester/TestDictionary_5class.txt")
 test_dataset = jdh.Jester_Dataset(dictionary_file=test_dictionary,seq_size=10)
 
 # Initialize the model
 # Custom Resnet50 (the [3,4,6,3] is what makes it Resnet50. Look at orig pytorch resnet.py for other configs)
 model = myresnet.ResNet(myresnet.Bottleneck, [3, 4, 6, 3], input_depth=20, num_classes=5)
+
+# For GPU support
+if GPU:
+    import torch.nn.parallel
+    import torch.backends.cudnn as cudnn
+    import torch.utils.data
+    model = torch.nn.DataParallel(model).cuda()
+
 # Load the model from the checkpoint
-model = torch.load('./resnet50_saved_model_20.pth')
+model = torch.load('./resnet50_saved_model_200.pth')
 # Set it to test mode (for batch norm and dropout layers)
 model.eval()
 
@@ -38,15 +51,19 @@ total_cnt = 0
 
 for img,lbl,seq in test_dataset.read(batch_size=1, shuffle=True):
     # Create the data and label variables so we can use them in the computation
-    img = Variable(torch.FloatTensor(img),requires_grad=False)
-    lbl = Variable(torch.LongTensor(lbl))
+    img_var = Variable(torch.FloatTensor(img),requires_grad=False)
+    #lbl = Variable(torch.LongTensor(lbl))
+
     # Call a forward pass on the data
-    output = model(img)
+    output = model(img_var)
+    
     # Run quick accuracy check
     #print("GT Label: ",lbl.data.numpy())
     #print("Output: ",output.data.numpy())
+    
     # Get the max index from the ith softmax array
     #guess = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+    
     # if index == gt label call it correct
     if int(lbl[0]) == int((output.data.max(1, keepdim=True)[1][0])):
         correct_cnt += 1
